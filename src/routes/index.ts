@@ -8,6 +8,8 @@ import { ConnectionRoutes } from '../modules/connection/connection.routes';
 import { NotificationRoutes } from '../modules/notification/notification.routes';
 import { ScheduleRoutes } from '../modules/schedule/schedule.routes';
 import { OutageRoutes } from '../modules/outage/outage.routes';
+import { BillRoutes } from '../modules/bill/bill.routes';
+import { PaymentRoutes } from '../modules/payment/payment.routes';
 import { ZoneRoutes } from '../modules/zone/zone.routes';
 
 type TModuleRoute = { path: string; route: Router };
@@ -25,6 +27,8 @@ const moduleRoutes: TModuleRoute[] = [
   { path: '/connections', route: ConnectionRoutes },
   { path: '/schedules', route: ScheduleRoutes },
   { path: '/outages', route: OutageRoutes },
+  { path: '/bills', route: BillRoutes },
+  { path: '/payments', route: PaymentRoutes },
   { path: '/notifications', route: NotificationRoutes },
 ];
 
