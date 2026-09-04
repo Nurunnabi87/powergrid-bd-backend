@@ -17,7 +17,9 @@
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "format": "prettier --write \"src/**/*.ts\" \"prisma/**/*.ts\"",
-    "postman": "node ./node_modules/tsx/dist/cli.mjs scripts/build-postman.ts"
+    "postman": "node ./node_modules/tsx/dist/cli.mjs scripts/build-postman.ts",
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma generate && prisma migrate deploy"
   },
   "keywords": [
     "load-shedding",
