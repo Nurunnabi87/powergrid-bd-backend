@@ -164,6 +164,7 @@ const main = (): void => {
       },
     ],
     variable: [
+      { key: 'hostUrl', value: 'http://localhost:5000' },
       { key: 'baseUrl', value: 'http://localhost:5000/api/v1' },
       { key: 'adminToken', value: '' },
       { key: 'technicianToken', value: '' },
@@ -188,7 +189,9 @@ const main = (): void => {
             request: {
               method: 'GET',
               header: [],
-              url: { raw: '{{baseUrl}}/../../health', host: ['{{baseUrl}}'] },
+              // /health sits outside /api/v1, so it uses its own variable
+              // rather than a "../.." path Postman would not normalise.
+              url: { raw: '{{hostUrl}}/health', host: ['{{hostUrl}}'], path: ['health'] },
             },
             response: [],
           },
