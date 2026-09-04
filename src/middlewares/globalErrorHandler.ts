@@ -7,6 +7,41 @@ import { Prisma } from '../generated/prisma/client';
 
 type TErrorDetail = { field: string; message: string };
 
+type TDriverCause = {
+  table?: string;
+  constraint?: { index?: string; fields?: string[] };
+};
+
+/**
+ * Prisma 7 talks to Postgres through a driver adapter, which no longer
+ * fills in the old `meta.target` array. The offending column now has to be
+ * recovered from the driver's constraint payload - typically an index name
+ * shaped `<table>_<field>_key`. Falls back to `meta.target` so the handler
+ * still works if a future release restores it.
+ */
+const constraintFields = (meta: Record<string, unknown> | undefined): string[] => {
+  const legacyTarget = meta?.target;
+  if (Array.isArray(legacyTarget)) return legacyTarget as string[];
+  if (typeof legacyTarget === 'string') return [legacyTarget];
+
+  const cause = (
+    meta?.driverAdapterError as { cause?: TDriverCause } | undefined
+  )?.cause;
+
+  if (cause?.constraint?.fields?.length) return cause.constraint.fields;
+
+  const index = cause?.constraint?.index;
+  if (!index) return [];
+
+  // "distribution_zones_code_key" -> "code"
+  const withoutSuffix = index.replace(/_(key|pkey|fkey|idx)$/, '');
+  const withoutTable = cause.table
+    ? withoutSuffix.replace(new RegExp(`^${cause.table}_`), '')
+    : withoutSuffix;
+
+  return withoutTable ? withoutTable.split('_') : [];
+};
+
 const globalErrorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   let statusCode = 500;
   let message = 'Something went wrong';
@@ -27,11 +62,12 @@ const globalErrorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   } else if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === 'P2002') {
       statusCode = 409;
-      const target = (err.meta?.target as string[] | undefined)?.join(', ');
+      const fields = constraintFields(err.meta);
+      const target = fields.join(', ');
       message = target
         ? `A record with this ${target} already exists`
         : 'Duplicate value violates a unique constraint';
-      errorDetails = target ? [{ field: target, message }] : [];
+      errorDetails = fields.map((field) => ({ field, message }));
     } else if (err.code === 'P2025') {
       statusCode = 404;
       message = (err.meta?.cause as string) ?? 'Record not found';
