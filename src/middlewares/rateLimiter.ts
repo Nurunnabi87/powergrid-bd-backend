@@ -1,5 +1,5 @@
 import { Request } from 'express';
-import rateLimit, { Options } from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator, Options } from 'express-rate-limit';
 import RedisStore from 'rate-limit-redis';
 import redis from '../shared/redis';
 
@@ -46,9 +46,12 @@ export const authLimiter = rateLimit({
   ...shared,
   windowMs: 15 * 60 * 1000,
   limit: 10,
+  // ipKeyGenerator normalises IPv6 addresses down to their subnet prefix;
+  // keying on a raw req.ip would let one client rotate through its own
+  // /64 block and get a fresh budget for every address.
   keyGenerator: (req: Request) => {
     const email = (req.body as { email?: string } | undefined)?.email ?? '';
-    return `${req.ip}:${email.toLowerCase()}`;
+    return `${ipKeyGenerator(req.ip ?? '')}:${email.toLowerCase()}`;
   },
 });
 
