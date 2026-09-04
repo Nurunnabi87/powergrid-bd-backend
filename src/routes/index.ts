@@ -7,6 +7,7 @@ import { UserRoutes } from '../modules/user/user.routes';
 import { ConnectionRoutes } from '../modules/connection/connection.routes';
 import { NotificationRoutes } from '../modules/notification/notification.routes';
 import { ScheduleRoutes } from '../modules/schedule/schedule.routes';
+import { OutageRoutes } from '../modules/outage/outage.routes';
 import { ZoneRoutes } from '../modules/zone/zone.routes';
 
 type TModuleRoute = { path: string; route: Router };
@@ -23,6 +24,7 @@ const moduleRoutes: TModuleRoute[] = [
   { path: '/areas', route: AreaRoutes },
   { path: '/connections', route: ConnectionRoutes },
   { path: '/schedules', route: ScheduleRoutes },
+  { path: '/outages', route: OutageRoutes },
   { path: '/notifications', route: NotificationRoutes },
 ];
 
