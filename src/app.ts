@@ -2,6 +2,7 @@ import cors from 'cors';
 import express, { Application, Request, Response } from 'express';
 import helmet from 'helmet';
 import config from './config';
+import AppError from './errors/AppError';
 import { DocsRoutes } from './docs/docs.routes';
 import globalErrorHandler from './middlewares/globalErrorHandler';
 import notFound from './middlewares/notFound';
@@ -23,7 +24,11 @@ app.use(
       if (!origin || config.cors_origins.includes(origin)) {
         return callback(null, true);
       }
-      return callback(new Error(`Origin ${origin} is not allowed by CORS`));
+      // AppError rather than a plain Error, so a blocked origin surfaces as
+      // a 403 instead of falling through to the generic 500 handler.
+      return callback(
+        new AppError(403, `Origin ${origin} is not allowed by CORS`)
+      );
     },
     credentials: true,
   })

@@ -9,31 +9,42 @@ import redis from '../shared/redis';
  * is used whenever REDIS_URL is set and falls back to memory otherwise.
  */
 const client = redis;
-const store = client
-  ? new RedisStore({
-      sendCommand: (command: string, ...args: string[]) =>
-        client.call(command, ...args) as Promise<never>,
-      prefix: 'ratelimit:',
-    })
-  : undefined;
 
-const shared: Partial<Options> = {
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  ...(store && { store }),
-  handler: (_req, res, _next, options) => {
-    res.status(options.statusCode).json({
-      success: false,
-      message: 'Too many requests. Please slow down and try again later',
-      errors: [],
-      errorDetails: [],
-    });
-  },
+/**
+ * Each limiter needs its OWN store instance - express-rate-limit refuses to
+ * boot with ERR_ERL_STORE_REUSE if one store object is shared, because the
+ * store holds per-limiter window state.
+ */
+const makeStore = (prefix: string) =>
+  client
+    ? new RedisStore({
+        sendCommand: (command: string, ...args: string[]) =>
+          client.call(command, ...args) as Promise<never>,
+        prefix,
+      })
+    : undefined;
+
+const shared = (prefix: string): Partial<Options> => {
+  const store = makeStore(prefix);
+
+  return {
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    ...(store && { store }),
+    handler: (_req, res, _next, options) => {
+      res.status(options.statusCode).json({
+        success: false,
+        message: 'Too many requests. Please slow down and try again later',
+        errors: [],
+        errorDetails: [],
+      });
+    },
+  };
 };
 
 /** Broad protection for the whole API. */
 export const globalLimiter = rateLimit({
-  ...shared,
+  ...shared('ratelimit:global:'),
   windowMs: 15 * 60 * 1000,
   limit: 300,
 });
@@ -43,7 +54,7 @@ export const globalLimiter = rateLimit({
  * shared NAT address cannot lock every user out of logging in.
  */
 export const authLimiter = rateLimit({
-  ...shared,
+  ...shared('ratelimit:auth:'),
   windowMs: 15 * 60 * 1000,
   limit: 10,
   // ipKeyGenerator normalises IPv6 addresses down to their subnet prefix;
@@ -57,7 +68,7 @@ export const authLimiter = rateLimit({
 
 /** Payment initiation is expensive and hits a third party - keep it low. */
 export const paymentLimiter = rateLimit({
-  ...shared,
+  ...shared('ratelimit:payment:'),
   windowMs: 60 * 1000,
   limit: 10,
 });
