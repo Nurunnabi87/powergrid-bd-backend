@@ -1,0 +1,490 @@
+// PowerGrid BD - Load Shedding & Power Outage Management System
+//
+// Hierarchy (mirrors the real distribution network):
+//   DistributionZone -> Substation -> Feeder -> Area -> Connection
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "cjs"
+  importFileExtension = ""
+}
+
+datasource db {
+  provider = "postgresql"
+  // url / directUrl now live in prisma.config.ts (Prisma 7)
+}
+
+// ---------- ENUMS ----------
+
+enum UserRole {
+  CUSTOMER
+  TECHNICIAN
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BANNED
+}
+
+enum SubstationStatus {
+  OPERATIONAL
+  MAINTENANCE
+  OFFLINE
+}
+
+enum PriorityTier {
+  CRITICAL // hospitals, water pumping - never load-shed
+  HIGH
+  NORMAL
+  LOW
+}
+
+enum ConnectionType {
+  RESIDENTIAL
+  COMMERCIAL
+  INDUSTRIAL
+}
+
+enum ConnectionStatus {
+  ACTIVE
+  SUSPENDED
+  DISCONNECTED
+}
+
+enum ScheduleStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum OutageType {
+  SCHEDULED
+  UNEXPECTED
+}
+
+enum OutageStatus {
+  REPORTED
+  ACKNOWLEDGED
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum OutageSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  ACCEPTED
+  COMPLETED
+  REASSIGNED
+}
+
+enum BillStatus {
+  UNPAID
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum PaymentStatus {
+  INITIATED
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PaymentProvider {
+  BKASH
+}
+
+enum NotificationType {
+  SCHEDULE_PUBLISHED
+  OUTAGE_REPORTED
+  OUTAGE_ASSIGNED
+  OUTAGE_RESOLVED
+  POWER_RESTORED
+  BILL_GENERATED
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+}
+
+// ---------- USERS ----------
+
+model User {
+  id        String     @id @default(uuid())
+  name      String
+  email     String     @unique
+  // Nullable: Google-only accounts never set a password.
+  password  String?
+  googleId  String?    @unique
+  phone     String?
+  address   String?
+  avatarUrl String?
+  role      UserRole   @default(CUSTOMER)
+  status    UserStatus @default(ACTIVE)
+  isDeleted Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  technicianProfile TechnicianProfile?
+  refreshTokens     RefreshToken[]
+  connections       Connection[]
+  bills             Bill[]
+  payments          Payment[]
+  notifications     Notification[]
+  reportedOutages   Outage[]           @relation("ReportedOutages")
+  createdSchedules  LoadSheddingSchedule[] @relation("CreatedSchedules")
+  technicianJobs    OutageAssignment[] @relation("TechnicianAssignments")
+  dispatchedJobs    OutageAssignment[] @relation("DispatchedAssignments")
+  auditLogs         AuditLog[]
+
+  @@index([role, status])
+  @@index([isDeleted])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  // Stored hashed so a database leak cannot be replayed against the API.
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model TechnicianProfile {
+  id             String  @id @default(uuid())
+  userId         String  @unique
+  specialization String
+  isAvailable    Boolean @default(true)
+  // Denormalised counter so assignment eligibility is a single-row read
+  // instead of an aggregate over every open job.
+  activeJobCount Int     @default(0)
+  maxConcurrentJobs Int  @default(3)
+  zoneId         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  zone DistributionZone? @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+
+  @@index([zoneId, isAvailable])
+  @@map("technician_profiles")
+}
+
+// ---------- DISTRIBUTION HIERARCHY ----------
+
+model DistributionZone {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  city      String
+  district  String?
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  substations Substation[]
+  technicians TechnicianProfile[]
+
+  @@index([isDeleted])
+  @@map("distribution_zones")
+}
+
+model Substation {
+  id          String           @id @default(uuid())
+  name        String
+  code        String           @unique
+  zoneId      String
+  capacityMva Float
+  status      SubstationStatus @default(OPERATIONAL)
+  isDeleted   Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Restrict: a zone that still owns substations cannot be removed.
+  zone    DistributionZone @relation(fields: [zoneId], references: [id], onDelete: Restrict)
+  feeders Feeder[]
+
+  @@index([zoneId, isDeleted])
+  @@map("substations")
+}
+
+model Feeder {
+  id           String   @id @default(uuid())
+  name         String
+  code         String   @unique
+  substationId String
+  voltageLevel String // e.g. "11kV", "33kV"
+  loadKw       Float
+  isDeleted    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  substation Substation             @relation(fields: [substationId], references: [id], onDelete: Restrict)
+  areas      Area[]
+  schedules  LoadSheddingSchedule[]
+  outages    Outage[]
+
+  @@index([substationId, isDeleted])
+  @@map("feeders")
+}
+
+model Area {
+  id           String       @id @default(uuid())
+  name         String
+  code         String       @unique
+  feederId     String
+  population   Int          @default(0)
+  priorityTier PriorityTier @default(NORMAL)
+  isDeleted    Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  feeder      Feeder       @relation(fields: [feederId], references: [id], onDelete: Restrict)
+  connections Connection[]
+  outages     Outage[]
+
+  @@index([feederId, isDeleted])
+  @@index([priorityTier])
+  @@map("areas")
+}
+
+model Connection {
+  id             String           @id @default(uuid())
+  meterNo        String           @unique
+  customerId     String
+  areaId         String
+  connectionType ConnectionType   @default(RESIDENTIAL)
+  // Tariff in BDT per kWh, snapshotted onto each bill at generation time.
+  tariffRate     Float            @default(7.5)
+  status         ConnectionStatus @default(ACTIVE)
+  isDeleted      Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  customer User   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  area     Area   @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  bills    Bill[]
+
+  @@index([customerId, isDeleted])
+  @@index([areaId, status])
+  @@map("connections")
+}
+
+// ---------- LOAD SHEDDING & OUTAGES ----------
+
+model LoadSheddingSchedule {
+  id              String         @id @default(uuid())
+  feederId        String
+  // Calendar day of the shedding slot, stored at UTC midnight.
+  date            DateTime       @db.Date
+  startTime       DateTime
+  endTime         DateTime
+  reason          String?
+  status          ScheduleStatus @default(PLANNED)
+  isAutoGenerated Boolean        @default(false)
+  createdById     String?
+  isDeleted       Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  feeder    Feeder @relation(fields: [feederId], references: [id], onDelete: Restrict)
+  createdBy User?  @relation("CreatedSchedules", fields: [createdById], references: [id], onDelete: SetNull)
+
+  notifications Notification[]
+
+  // Drives both the overlap/conflict query and the per-day listing.
+  @@index([feederId, date, status])
+  @@index([date, status])
+  @@map("load_shedding_schedules")
+}
+
+model Outage {
+  id                String         @id @default(uuid())
+  type              OutageType     @default(UNEXPECTED)
+  areaId            String
+  feederId          String?
+  reportedById      String?
+  status            OutageStatus   @default(REPORTED)
+  severity          OutageSeverity @default(MEDIUM)
+  title             String
+  description       String
+  photoUrl          String?
+  affectedCustomers Int            @default(0)
+  reportedAt        DateTime       @default(now())
+  acknowledgedAt    DateTime?
+  resolvedAt        DateTime?
+  restoredAt        DateTime?
+  // Persisted at restoration so MTTR analytics is a plain aggregate
+  // rather than a per-row timestamp subtraction.
+  downtimeMinutes   Int?
+  resolutionNote    String?
+  isDeleted         Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  area        Area               @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  feeder      Feeder?            @relation(fields: [feederId], references: [id], onDelete: SetNull)
+  reportedBy  User?              @relation("ReportedOutages", fields: [reportedById], references: [id], onDelete: SetNull)
+  assignments OutageAssignment[]
+  notifications Notification[]
+
+  @@index([status, areaId])
+  @@index([type, status])
+  @@index([reportedById])
+  @@index([createdAt])
+  @@map("outages")
+}
+
+model OutageAssignment {
+  id           String           @id @default(uuid())
+  outageId     String
+  technicianId String
+  assignedById String?
+  status       AssignmentStatus @default(ASSIGNED)
+  notes        String?
+  assignedAt   DateTime         @default(now())
+  acceptedAt   DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  outage     Outage @relation(fields: [outageId], references: [id], onDelete: Cascade)
+  technician User   @relation("TechnicianAssignments", fields: [technicianId], references: [id], onDelete: Restrict)
+  assignedBy User?  @relation("DispatchedAssignments", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  // The same technician can never be attached to one outage twice, while
+  // reassignment to a different technician stays recorded as history.
+  @@unique([outageId, technicianId])
+  @@index([technicianId, status])
+  @@map("outage_assignments")
+}
+
+// ---------- BILLING & PAYMENTS ----------
+
+model Bill {
+  id            String     @id @default(uuid())
+  customerId    String
+  connectionId  String
+  // "YYYY-MM" - the month being billed.
+  billingPeriod String
+  unitsConsumed Float
+  // Snapshot of the tariff at generation time, so a later tariff change
+  // never rewrites the history of an already-issued bill.
+  tariffRate    Float
+  amount        Float
+  lateFee       Float      @default(0)
+  totalAmount   Float
+  dueDate       DateTime
+  status        BillStatus @default(UNPAID)
+  issuedAt      DateTime   @default(now())
+  paidAt        DateTime?
+  isDeleted     Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  customer   User       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  connection Connection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  payments   Payment[]
+
+  // One bill per meter per month - makes bulk generation safely re-runnable.
+  @@unique([connectionId, billingPeriod])
+  @@index([customerId, status])
+  @@index([status, dueDate])
+  @@map("bills")
+}
+
+model Payment {
+  id                    String          @id @default(uuid())
+  billId                String
+  customerId            String
+  amount                Float
+  currency              String          @default("BDT")
+  provider              PaymentProvider @default(BKASH)
+  status                PaymentStatus   @default(INITIATED)
+  // bKash identifiers. paymentID is returned by Create Payment; trxID only
+  // exists once Execute Payment succeeds.
+  paymentID             String?         @unique
+  trxID                 String?         @unique
+  merchantInvoiceNumber String          @unique
+  payerReference        String?
+  gatewayResponse       Json?
+  failureReason         String?
+  initiatedAt           DateTime        @default(now())
+  paidAt                DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  bill     Bill @relation(fields: [billId], references: [id], onDelete: Restrict)
+  customer User @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId, status])
+  @@index([billId])
+  @@map("payments")
+}
+
+// ---------- NOTIFICATIONS & AUDIT ----------
+
+model Notification {
+  id         String              @id @default(uuid())
+  userId     String
+  type       NotificationType
+  channel    NotificationChannel @default(IN_APP)
+  title      String
+  message    String
+  isRead     Boolean             @default(false)
+  readAt     DateTime?
+  outageId   String?
+  scheduleId String?
+  createdAt  DateTime            @default(now())
+
+  user     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outage   Outage?               @relation(fields: [outageId], references: [id], onDelete: Cascade)
+  schedule LoadSheddingSchedule? @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
