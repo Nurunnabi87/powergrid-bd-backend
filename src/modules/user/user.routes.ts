@@ -16,12 +16,7 @@ router.patch(
   UserController.updateMe
 );
 
-router.patch(
-  '/me/avatar',
-  auth(),
-  singleImage('avatar'),
-  UserController.updateAvatar
-);
+router.patch('/me/avatar', auth(), singleImage('avatar'), UserController.updateAvatar);
 
 router.get('/me/connections', auth(), UserController.getMyConnections);
 

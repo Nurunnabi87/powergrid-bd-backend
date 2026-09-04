@@ -242,7 +242,10 @@ const getMyReports = async (userId: string, query: Record<string, unknown>) => {
   return { data, meta: buildMeta(page, limit, total) };
 };
 
-const getMyAssignments = async (technicianId: string, query: Record<string, unknown>) => {
+const getMyAssignments = async (
+  technicianId: string,
+  query: Record<string, unknown>
+) => {
   const { page, limit, skip } = buildQueryOptions({
     query,
     sortableFields: SORTABLE,
@@ -298,10 +301,7 @@ const getById = async (id: string, user: TTokenPayload) => {
   if (!outage) throw new AppError(404, 'Outage not found');
 
   // Customers may only open outages they reported themselves.
-  if (
-    user.role === UserRole.CUSTOMER &&
-    outage.reportedBy?.id !== user.userId
-  ) {
+  if (user.role === UserRole.CUSTOMER && outage.reportedBy?.id !== user.userId) {
     throw new AppError(403, 'You can only view outages you reported');
   }
 
@@ -492,7 +492,9 @@ const updateStatus = async (
       id: true,
       status: true,
       assignments: {
-        where: { status: { in: [AssignmentStatus.ASSIGNED, AssignmentStatus.ACCEPTED] } },
+        where: {
+          status: { in: [AssignmentStatus.ASSIGNED, AssignmentStatus.ACCEPTED] },
+        },
         select: { id: true, technicianId: true },
       },
     },
@@ -562,7 +564,9 @@ const restore = async (
       areaId: true,
       area: { select: { name: true } },
       assignments: {
-        where: { status: { in: [AssignmentStatus.ASSIGNED, AssignmentStatus.ACCEPTED] } },
+        where: {
+          status: { in: [AssignmentStatus.ASSIGNED, AssignmentStatus.ACCEPTED] },
+        },
         select: { id: true, technicianId: true },
       },
     },

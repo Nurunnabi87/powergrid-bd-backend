@@ -9,7 +9,10 @@ const createConnectionSchema = z.object({
       .string()
       .trim()
       .toUpperCase()
-      .regex(/^[A-Z0-9-]{4,24}$/, 'Meter number must be 4-24 letters, digits or dashes'),
+      .regex(
+        /^[A-Z0-9-]{4,24}$/,
+        'Meter number must be 4-24 letters, digits or dashes'
+      ),
     customerId: z.uuid('customerId must be a valid uuid'),
     areaId: z.uuid('areaId must be a valid uuid'),
     connectionType: typeRule.optional(),

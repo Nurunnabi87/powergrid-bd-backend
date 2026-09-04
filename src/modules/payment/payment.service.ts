@@ -127,8 +127,7 @@ const initiate = async (billId: string, user: TTokenPayload) => {
 
 // ---------- IDEMPOTENT FULFILLMENT ----------
 
-const isCompleted = (status?: string): boolean =>
-  status?.toLowerCase() === 'completed';
+const isCompleted = (status?: string): boolean => status?.toLowerCase() === 'completed';
 
 /**
  * Confirms a payment with bKash and settles the bill.
@@ -253,10 +252,7 @@ const fulfill = async (paymentID: string, actorId?: string) => {
  * bKash redirects the payer back here with ?paymentID=&status=
  * (success | failure | cancel).
  */
-const handleCallback = async (query: {
-  paymentID?: string;
-  status?: string;
-}) => {
+const handleCallback = async (query: { paymentID?: string; status?: string }) => {
   if (!query.paymentID) {
     throw new AppError(400, 'bKash callback did not include a paymentID');
   }
@@ -284,8 +280,7 @@ const handleCallback = async (query: {
       prisma.payment.update({
         where: { id: payment.id },
         data: {
-          status:
-            status === 'cancel' ? PaymentStatus.CANCELLED : PaymentStatus.FAILED,
+          status: status === 'cancel' ? PaymentStatus.CANCELLED : PaymentStatus.FAILED,
           failureReason: `Payer ${status === 'cancel' ? 'cancelled' : 'failed'} the bKash checkout`,
         },
       }),
@@ -305,7 +300,9 @@ const handleCallback = async (query: {
     ]);
   }
 
-  return { outcome: status === 'cancel' ? ('cancelled' as const) : ('failed' as const) };
+  return {
+    outcome: status === 'cancel' ? ('cancelled' as const) : ('failed' as const),
+  };
 };
 
 // ---------- MANUAL VERIFY ----------

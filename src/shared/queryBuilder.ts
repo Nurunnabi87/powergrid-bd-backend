@@ -34,9 +34,7 @@ export const buildQueryOptions = ({
   const limit = Math.min(Math.max(1, rawLimit), MAX_LIMIT);
 
   const requestedSort = String(query.sortBy ?? '');
-  const sortBy = sortableFields.includes(requestedSort)
-    ? requestedSort
-    : defaultSort;
+  const sortBy = sortableFields.includes(requestedSort) ? requestedSort : defaultSort;
 
   const sortOrder = String(query.sortOrder).toLowerCase() === 'asc' ? 'asc' : 'desc';
 
@@ -65,11 +63,7 @@ export const buildSearchFilter = (
   };
 };
 
-export const buildMeta = (
-  page: number,
-  limit: number,
-  total: number
-): TMeta => ({
+export const buildMeta = (page: number, limit: number, total: number): TMeta => ({
   page,
   limit,
   total,

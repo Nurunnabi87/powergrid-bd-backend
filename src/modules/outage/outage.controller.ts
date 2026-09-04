@@ -17,10 +17,7 @@ const report = async (req: Request, res: Response): Promise<void> => {
     ? await uploadBuffer(req.file.buffer, 'powergrid/outages')
     : undefined;
 
-  const data = await OutageService.report(
-    { ...req.body, photoUrl },
-    actorOf(req)
-  );
+  const data = await OutageService.report({ ...req.body, photoUrl }, actorOf(req));
 
   sendResponse(res, {
     statusCode: 201,

@@ -118,10 +118,7 @@ const getById = async (id: string, user: TTokenPayload) => {
   if (!connection) throw new AppError(404, 'Connection not found');
 
   // Customers may only read their own meters; admins and technicians see all.
-  if (
-    user.role === UserRole.CUSTOMER &&
-    connection.customer.id !== user.userId
-  ) {
+  if (user.role === UserRole.CUSTOMER && connection.customer.id !== user.userId) {
     throw new AppError(403, 'You can only view your own connections');
   }
 
@@ -182,7 +179,11 @@ const softDelete = async (id: string, actor: TActor) => {
   if (!existing) throw new AppError(404, 'Connection not found');
 
   const unpaidBills = await prisma.bill.count({
-    where: { connectionId: id, isDeleted: false, status: { in: ['UNPAID', 'OVERDUE'] } },
+    where: {
+      connectionId: id,
+      isDeleted: false,
+      status: { in: ['UNPAID', 'OVERDUE'] },
+    },
   });
 
   if (unpaidBills > 0) {

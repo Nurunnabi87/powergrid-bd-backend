@@ -8,7 +8,11 @@ import { UserService } from './user.service';
 
 const getMe = async (req: Request, res: Response): Promise<void> => {
   const data = await UserService.getMe(currentUser(req).userId);
-  sendResponse(res, { statusCode: 200, message: 'Profile retrieved successfully', data });
+  sendResponse(res, {
+    statusCode: 200,
+    message: 'Profile retrieved successfully',
+    data,
+  });
 };
 
 const updateMe = async (req: Request, res: Response): Promise<void> => {

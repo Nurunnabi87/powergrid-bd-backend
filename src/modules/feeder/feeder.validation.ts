@@ -25,7 +25,11 @@ const updateFeederSchema = z.object({
       name: z.string().trim().min(2).optional(),
       code: codeRule.optional(),
       substationId: z.uuid().optional(),
-      voltageLevel: z.string().trim().regex(/^\d{1,3}kV$/i).optional(),
+      voltageLevel: z
+        .string()
+        .trim()
+        .regex(/^\d{1,3}kV$/i)
+        .optional(),
       loadKw: z.number().positive().optional(),
     })
     .refine((body) => Object.keys(body).length > 0, {

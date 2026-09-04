@@ -16,10 +16,7 @@ const getOutageAnalytics = async (req: Request, res: Response): Promise<void> =>
   });
 };
 
-const getLoadSheddingAnalytics = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
+const getLoadSheddingAnalytics = async (req: Request, res: Response): Promise<void> => {
   const data = await AnalyticsService.getLoadSheddingAnalytics(range(req));
   sendResponse(res, {
     statusCode: 200,

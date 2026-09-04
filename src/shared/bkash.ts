@@ -58,14 +58,15 @@ const request = async <T>(
   try {
     response = await fetch(`${config.bkash.base_url}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...headers,
+      },
       body: JSON.stringify(body),
     });
   } catch (error) {
-    throw new AppError(
-      502,
-      `Could not reach bKash: ${(error as Error).message}`
-    );
+    throw new AppError(502, `Could not reach bKash: ${(error as Error).message}`);
   }
 
   const text = await response.text();

@@ -93,10 +93,7 @@ const register = async (payload: {
     throw new AppError(409, 'An account with this email already exists');
   }
 
-  const hashedPassword = await bcrypt.hash(
-    payload.password,
-    config.bcrypt_salt_rounds
-  );
+  const hashedPassword = await bcrypt.hash(payload.password, config.bcrypt_salt_rounds);
 
   // Self-registration always creates a CUSTOMER. Elevating to TECHNICIAN or
   // ADMIN is an admin-only operation, so the role can never be chosen by

@@ -1,10 +1,6 @@
 import AppError from '../../errors/AppError';
 import { Prisma } from '../../generated/prisma/client';
-import {
-  BillStatus,
-  NotificationType,
-  UserRole,
-} from '../../generated/prisma/enums';
+import { BillStatus, NotificationType, UserRole } from '../../generated/prisma/enums';
 import { writeAudit } from '../../shared/auditLog';
 import { TTokenPayload } from '../../shared/jwt';
 import prisma from '../../shared/prisma';
@@ -82,7 +78,8 @@ const generate = async (
     // per meter so the demo data is stable rather than random noise.
     const units =
       payload.defaultUnits ??
-      120 + (connection.meterNo.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 180);
+      120 +
+        (connection.meterNo.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 180);
     const amount = round2(units * connection.tariffRate);
 
     return {
@@ -201,7 +198,11 @@ const buildWhere = (query: Record<string, unknown>): Prisma.BillWhereInput => ({
   ...(query.billingPeriod ? { billingPeriod: String(query.billingPeriod) } : {}),
   ...(query.customerId ? { customerId: String(query.customerId) } : {}),
   ...(query.search
-    ? { connection: { meterNo: { contains: String(query.search), mode: 'insensitive' } } }
+    ? {
+        connection: {
+          meterNo: { contains: String(query.search), mode: 'insensitive' },
+        },
+      }
     : {}),
 });
 

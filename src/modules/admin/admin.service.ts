@@ -240,12 +240,17 @@ const getDashboardStats = async () => {
       byStatus: Object.fromEntries(
         billTotals.map((r) => [
           r.status,
-          { count: r._count._all, amount: Number((r._sum.totalAmount ?? 0).toFixed(2)) },
+          {
+            count: r._count._all,
+            amount: Number((r._sum.totalAmount ?? 0).toFixed(2)),
+          },
         ])
       ),
       unpaidAmount: Number(
         billTotals
-          .filter((r) => r.status === BillStatus.UNPAID || r.status === BillStatus.OVERDUE)
+          .filter(
+            (r) => r.status === BillStatus.UNPAID || r.status === BillStatus.OVERDUE
+          )
           .reduce((sum, r) => sum + (r._sum.totalAmount ?? 0), 0)
           .toFixed(2)
       ),

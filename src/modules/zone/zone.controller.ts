@@ -21,9 +21,7 @@ const create = async (req: Request, res: Response): Promise<void> => {
 };
 
 const getAll = async (req: Request, res: Response): Promise<void> => {
-  const { data, meta } = await ZoneService.getAll(
-    req.query as Record<string, unknown>
-  );
+  const { data, meta } = await ZoneService.getAll(req.query as Record<string, unknown>);
 
   sendResponse(res, {
     statusCode: 200,

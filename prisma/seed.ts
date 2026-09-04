@@ -56,7 +56,12 @@ const slotOn = (date: Date, hour: number, durationHours: number) => {
 const ZONES = [
   { name: 'Dhaka North', code: 'DHK-N', city: 'Dhaka', district: 'Dhaka' },
   { name: 'Dhaka South', code: 'DHK-S', city: 'Dhaka', district: 'Dhaka' },
-  { name: 'Chattogram Metro', code: 'CTG-M', city: 'Chattogram', district: 'Chattogram' },
+  {
+    name: 'Chattogram Metro',
+    code: 'CTG-M',
+    city: 'Chattogram',
+    district: 'Chattogram',
+  },
 ];
 
 const AREA_NAMES = [
@@ -128,7 +133,8 @@ const main = async (): Promise<void> => {
   }
 
   const feeders: { id: string; areaIds: string[]; zoneId: string }[] = [];
-  const areas: { id: string; name: string; tier: PriorityTier; feederId: string }[] = [];
+  const areas: { id: string; name: string; tier: PriorityTier; feederId: string }[] =
+    [];
   let areaGroup = 0;
 
   for (const [zi, zone] of zones.entries()) {
@@ -139,7 +145,10 @@ const main = async (): Promise<void> => {
           code: `SS-${zone.code}-${s + 1}`,
           zoneId: zone.id,
           capacityMva: 40 + s * 15,
-          status: s === 1 && zi === 2 ? SubstationStatus.MAINTENANCE : SubstationStatus.OPERATIONAL,
+          status:
+            s === 1 && zi === 2
+              ? SubstationStatus.MAINTENANCE
+              : SubstationStatus.OPERATIONAL,
         },
       });
 
@@ -173,7 +182,7 @@ const main = async (): Promise<void> => {
               name: areaName,
               code: `AR-${zone.code}-${areaGroup}${ai}`,
               feederId: feeder.id,
-              population: 15000 + ((areaGroup + ai) * 3700) % 60000,
+              population: 15000 + (((areaGroup + ai) * 3700) % 60000),
               priorityTier: tier,
             },
           });
@@ -226,9 +235,16 @@ const main = async (): Promise<void> => {
 
   // ---------- CUSTOMERS + CONNECTIONS ----------
   const customerNames = [
-    'Ayesha Rahman', 'Tanvir Ahmed', 'Nusrat Jahan', 'Sabbir Hossain',
-    'Farhana Akter', 'Imran Chowdhury', 'Mitu Sultana', 'Rakib Uddin',
-    'Sharmin Nahar', 'Arif Mahmud',
+    'Ayesha Rahman',
+    'Tanvir Ahmed',
+    'Nusrat Jahan',
+    'Sabbir Hossain',
+    'Farhana Akter',
+    'Imran Chowdhury',
+    'Mitu Sultana',
+    'Rakib Uddin',
+    'Sharmin Nahar',
+    'Arif Mahmud',
   ];
 
   const customers = [];
@@ -265,14 +281,21 @@ const main = async (): Promise<void> => {
             customerId: customer.id,
             areaId: area.id,
             connectionType: type,
-            tariffRate: type === ConnectionType.INDUSTRIAL ? 9.2 : type === ConnectionType.COMMERCIAL ? 8.4 : 7.5,
+            tariffRate:
+              type === ConnectionType.INDUSTRIAL
+                ? 9.2
+                : type === ConnectionType.COMMERCIAL
+                  ? 8.4
+                  : 7.5,
           },
         })
       );
     }
   }
 
-  console.log(`[seed] created ${customers.length} customers with ${connections.length} connections`);
+  console.log(
+    `[seed] created ${customers.length} customers with ${connections.length} connections`
+  );
 
   // ---------- BILLS (two months, some overdue) ----------
   const periods = [
@@ -495,7 +518,9 @@ const main = async (): Promise<void> => {
     });
   }
 
-  console.log(`[seed] created ${outageSpecs.length} outages across every lifecycle state`);
+  console.log(
+    `[seed] created ${outageSpecs.length} outages across every lifecycle state`
+  );
 
   await prisma.auditLog.create({
     data: {

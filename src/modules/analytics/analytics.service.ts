@@ -87,7 +87,9 @@ const getOutageAnalytics = async (range: TDateRange) => {
       id: true,
       name: true,
       code: true,
-      feeder: { select: { substation: { select: { zone: { select: { name: true } } } } } },
+      feeder: {
+        select: { substation: { select: { zone: { select: { name: true } } } } },
+      },
     },
   });
   const areaById = new Map(areaNames.map((a) => [a.id, a]));
@@ -157,7 +159,9 @@ const getLoadSheddingAnalytics = async (range: TDateRange) => {
       GROUP BY z.name
       ORDER BY hours DESC NULLS LAST
     `,
-    prisma.$queryRaw<{ feeder: string; code: string; slots: bigint; hours: number | null }[]>`
+    prisma.$queryRaw<
+      { feeder: string; code: string; slots: bigint; hours: number | null }[]
+    >`
       SELECT f.name                                                        AS feeder,
              f.code                                                        AS code,
              COUNT(*)                                                      AS slots,

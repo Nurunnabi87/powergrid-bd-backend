@@ -7,7 +7,10 @@ const createZoneSchema = z.object({
       .string()
       .trim()
       .toUpperCase()
-      .regex(/^[A-Z0-9-]{2,20}$/, 'Code must be 2-20 uppercase letters, digits or dashes'),
+      .regex(
+        /^[A-Z0-9-]{2,20}$/,
+        'Code must be 2-20 uppercase letters, digits or dashes'
+      ),
     city: z.string().trim().min(2, 'City is required'),
     district: z.string().trim().max(100).optional(),
   }),

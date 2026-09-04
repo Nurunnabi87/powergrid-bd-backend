@@ -12,10 +12,6 @@ router.get(
   AnalyticsController.getLoadSheddingAnalytics
 );
 
-router.get(
-  '/technicians',
-  auth('ADMIN'),
-  AnalyticsController.getTechnicianPerformance
-);
+router.get('/technicians', auth('ADMIN'), AnalyticsController.getTechnicianPerformance);
 
 export const AnalyticsRoutes = router;

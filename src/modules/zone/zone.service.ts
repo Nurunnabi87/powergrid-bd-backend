@@ -53,7 +53,9 @@ const getAll = async (query: Record<string, unknown>) => {
 
   const where = {
     isDeleted: false,
-    ...(query.city ? { city: { equals: String(query.city), mode: 'insensitive' as const } } : {}),
+    ...(query.city
+      ? { city: { equals: String(query.city), mode: 'insensitive' as const } }
+      : {}),
     ...buildSearchFilter(search, SEARCHABLE),
   };
 

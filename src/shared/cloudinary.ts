@@ -11,8 +11,8 @@ cloudinary.config({
 export const isUploadEnabled = (): boolean =>
   Boolean(
     config.cloudinary.cloud_name &&
-      config.cloudinary.api_key &&
-      config.cloudinary.api_secret
+    config.cloudinary.api_key &&
+    config.cloudinary.api_secret
   );
 
 /**
@@ -20,10 +20,7 @@ export const isUploadEnabled = (): boolean =>
  * memory rather than on disk because serverless filesystems are ephemeral
  * and read-only outside /tmp.
  */
-export const uploadBuffer = (
-  buffer: Buffer,
-  folder: string
-): Promise<string> => {
+export const uploadBuffer = (buffer: Buffer, folder: string): Promise<string> => {
   if (!isUploadEnabled()) {
     throw new AppError(
       503,
@@ -37,7 +34,10 @@ export const uploadBuffer = (
       (error, result) => {
         if (error || !result) {
           return reject(
-            new AppError(502, `Image upload failed: ${error?.message ?? 'unknown error'}`)
+            new AppError(
+              502,
+              `Image upload failed: ${error?.message ?? 'unknown error'}`
+            )
           );
         }
         resolve(result.secure_url);

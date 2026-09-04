@@ -28,7 +28,11 @@ const getAll = async (req: Request, res: Response): Promise<void> => {
 
 const getById = async (req: Request, res: Response): Promise<void> => {
   const data = await FeederService.getById(param(req, 'id'));
-  sendResponse(res, { statusCode: 200, message: 'Feeder retrieved successfully', data });
+  sendResponse(res, {
+    statusCode: 200,
+    message: 'Feeder retrieved successfully',
+    data,
+  });
 };
 
 const update = async (req: Request, res: Response): Promise<void> => {

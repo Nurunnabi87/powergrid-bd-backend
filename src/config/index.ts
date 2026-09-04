@@ -15,8 +15,7 @@ const required = (key: string): string => {
   return value;
 };
 
-const optional = (key: string, fallback = ''): string =>
-  process.env[key] ?? fallback;
+const optional = (key: string, fallback = ''): string => process.env[key] ?? fallback;
 
 export default {
   node_env: optional('NODE_ENV', 'development'),
@@ -41,7 +40,10 @@ export default {
   redis_url: optional('REDIS_URL'),
 
   bkash: {
-    base_url: optional('BKASH_BASE_URL', 'https://tokenized.sandbox.bka.sh/v1.2.0-beta'),
+    base_url: optional(
+      'BKASH_BASE_URL',
+      'https://tokenized.sandbox.bka.sh/v1.2.0-beta'
+    ),
     app_key: optional('BKASH_APP_KEY'),
     app_secret: optional('BKASH_APP_SECRET'),
     username: optional('BKASH_USERNAME'),

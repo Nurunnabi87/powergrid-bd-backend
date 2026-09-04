@@ -108,11 +108,7 @@ const getById = async (id: string) => {
   return substation;
 };
 
-const update = async (
-  id: string,
-  payload: Partial<TCreateInput>,
-  actor: TActor
-) => {
+const update = async (id: string, payload: Partial<TCreateInput>, actor: TActor) => {
   const existing = await prisma.substation.findFirst({
     where: { id, isDeleted: false },
     select: { id: true, name: true, code: true, status: true, capacityMva: true },

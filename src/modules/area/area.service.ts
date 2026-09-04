@@ -82,9 +82,7 @@ const getAll = async (query: Record<string, unknown>) => {
   const where = {
     isDeleted: false,
     ...(query.feederId ? { feederId: String(query.feederId) } : {}),
-    ...(query.priorityTier
-      ? { priorityTier: query.priorityTier as PriorityTier }
-      : {}),
+    ...(query.priorityTier ? { priorityTier: query.priorityTier as PriorityTier } : {}),
     ...(query.zoneId
       ? { feeder: { substation: { zoneId: String(query.zoneId) } } }
       : {}),

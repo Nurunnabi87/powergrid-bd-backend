@@ -39,8 +39,7 @@ app.use('/api/v1', router);
 app.get('/', (_req: Request, res: Response) => {
   res.status(200).json({
     success: true,
-    message:
-      'PowerGrid BD API - Load Shedding & Power Outage Management System',
+    message: 'PowerGrid BD API - Load Shedding & Power Outage Management System',
     docs: '/api/docs',
     version: 'v1',
   });

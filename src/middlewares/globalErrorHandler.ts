@@ -24,9 +24,8 @@ const constraintFields = (meta: Record<string, unknown> | undefined): string[] =
   if (Array.isArray(legacyTarget)) return legacyTarget as string[];
   if (typeof legacyTarget === 'string') return [legacyTarget];
 
-  const cause = (
-    meta?.driverAdapterError as { cause?: TDriverCause } | undefined
-  )?.cause;
+  const cause = (meta?.driverAdapterError as { cause?: TDriverCause } | undefined)
+    ?.cause;
 
   if (cause?.constraint?.fields?.length) return cause.constraint.fields;
 

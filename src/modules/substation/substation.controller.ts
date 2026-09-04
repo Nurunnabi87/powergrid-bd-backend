@@ -40,11 +40,7 @@ const getById = async (req: Request, res: Response): Promise<void> => {
 };
 
 const update = async (req: Request, res: Response): Promise<void> => {
-  const data = await SubstationService.update(
-    param(req, 'id'),
-    req.body,
-    actorOf(req)
-  );
+  const data = await SubstationService.update(param(req, 'id'), req.body, actorOf(req));
   sendResponse(res, {
     statusCode: 200,
     message: 'Substation updated successfully',

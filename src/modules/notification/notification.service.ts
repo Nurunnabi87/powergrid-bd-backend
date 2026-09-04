@@ -1,8 +1,5 @@
 import AppError from '../../errors/AppError';
-import {
-  NotificationChannel,
-  NotificationType,
-} from '../../generated/prisma/enums';
+import { NotificationChannel, NotificationType } from '../../generated/prisma/enums';
 import { Prisma } from '../../generated/prisma/client';
 import { sendEmail } from '../../shared/mailer';
 import prisma from '../../shared/prisma';
