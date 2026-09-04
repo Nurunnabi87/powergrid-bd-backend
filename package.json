@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "format": "prettier --write \"src/**/*.ts\" \"prisma/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\" \"prisma/**/*.ts\"",
+    "postman": "node ./node_modules/tsx/dist/cli.mjs scripts/build-postman.ts"
   },
   "keywords": [
     "load-shedding",
