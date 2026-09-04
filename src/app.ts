@@ -2,6 +2,7 @@ import cors from 'cors';
 import express, { Application, Request, Response } from 'express';
 import helmet from 'helmet';
 import config from './config';
+import { DocsRoutes } from './docs/docs.routes';
 import globalErrorHandler from './middlewares/globalErrorHandler';
 import notFound from './middlewares/notFound';
 import { globalLimiter } from './middlewares/rateLimiter';
@@ -32,6 +33,9 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/api', globalLimiter);
+
+// Swagger UI + the raw OpenAPI document.
+app.use('/api/docs', DocsRoutes);
 
 // All feature routes are versioned.
 app.use('/api/v1', router);
