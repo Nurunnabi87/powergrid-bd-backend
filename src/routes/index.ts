@@ -5,6 +5,8 @@ import { FeederRoutes } from '../modules/feeder/feeder.routes';
 import { AreaRoutes } from '../modules/area/area.routes';
 import { UserRoutes } from '../modules/user/user.routes';
 import { ConnectionRoutes } from '../modules/connection/connection.routes';
+import { NotificationRoutes } from '../modules/notification/notification.routes';
+import { ScheduleRoutes } from '../modules/schedule/schedule.routes';
 import { ZoneRoutes } from '../modules/zone/zone.routes';
 
 type TModuleRoute = { path: string; route: Router };
@@ -20,6 +22,8 @@ const moduleRoutes: TModuleRoute[] = [
   { path: '/feeders', route: FeederRoutes },
   { path: '/areas', route: AreaRoutes },
   { path: '/connections', route: ConnectionRoutes },
+  { path: '/schedules', route: ScheduleRoutes },
+  { path: '/notifications', route: NotificationRoutes },
 ];
 
 moduleRoutes.forEach(({ path, route }) => router.use(path, route));
