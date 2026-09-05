@@ -9,10 +9,15 @@
 
 | | |
 |---|---|
-| **Live API** | `<add your Vercel URL>` |
-| **Swagger docs** | `<live-url>/api/docs` |
-| **OpenAPI JSON** | `<live-url>/api/docs/openapi.json` |
+| **Live API** | **https://powergrid-bd-backend.vercel.app** |
+| **Swagger docs** | https://powergrid-bd-backend.vercel.app/api/docs |
+| **OpenAPI JSON** | https://powergrid-bd-backend.vercel.app/api/docs/openapi.json |
+| **Health check** | https://powergrid-bd-backend.vercel.app/health |
 | **Postman collection** | [`PowerGrid-BD.postman_collection.json`](./PowerGrid-BD.postman_collection.json) |
+
+Hosted on Vercel serverless functions with a Neon PostgreSQL database
+(`ap-southeast-1`). The deployed database is seeded, so every endpoint
+returns real data immediately.
 
 ## 🔑 Demo Credentials
 
@@ -151,6 +156,14 @@ Open `http://localhost:5000/api/docs` for Swagger, or import the Postman
 collection and hit **Send** on anything — a pre-request script logs in as all
 three roles and caches the tokens for you.
 
+To point the Postman collection at the deployed API instead, change two
+collection variables:
+
+```
+hostUrl = https://powergrid-bd-backend.vercel.app
+baseUrl = https://powergrid-bd-backend.vercel.app/api/v1
+```
+
 > **Windows note:** this project's folder name contains an `&`, which `cmd.exe`
 > treats as a command separator and which breaks every `npm`/`npx` shim. A
 > committed `.npmrc` sets `script-shell=bash` to work around it, and the Prisma
@@ -284,6 +297,22 @@ five routes — reads for any signed-in user, writes for `ADMIN`:
 
 To watch the callback as JSON instead of a redirect, append `&raw=true`.
 
+This works against the live API too — `BKASH_CALLBACK_URL` points at
+`https://powergrid-bd-backend.vercel.app/api/v1/payments/bkash/callback`, so
+bKash returns the payer straight to the deployed server.
+
+**Verification is real, not simulated.** Forging a success callback on a
+session that was never paid is rejected:
+
+```
+GET /api/v1/payments/bkash/callback?paymentID=<unpaid>&status=success&raw=true
+→ 400  bKash did not complete this payment: transaction status is "Initiated"
+```
+
+The payment is marked `FAILED` and the bill returns to `UNPAID`, because the
+server asks bKash's Execute Payment / Query Payment Status APIs rather than
+trusting the redirect.
+
 ## 🔒 Security
 
 - Passwords hashed with bcrypt (12 rounds) and never selected in any query
@@ -329,13 +358,42 @@ scripts/build-postman.ts
 Request flow: **routes → validation → auth → controller → service → Prisma**.
 Controllers stay thin; all business rules live in services.
 
+## ☁️ Deployment
+
+Vercel serverless functions + Neon PostgreSQL. `api/index.ts` exports the
+Express app without calling `listen()`, and a catch-all rewrite sends every
+request to it.
+
+Three things in `vercel.json` are worth explaining:
+
+- **`outputDirectory: "public"`** — because `package.json` defines a
+  `vercel-build` script, Vercel runs its static-build pipeline and then looks
+  for an output directory. Its default is `public` *or the repo root*, and
+  falling back to the root would publish `package.json`, `README.md` and every
+  other tracked file as static assets. Pinning it to `public/` exposes only the
+  landing page.
+- **`includeFiles: "node_modules/swagger-ui-dist/**"`** — `swagger-ui-express`
+  serves its CSS/JS from a path resolved at runtime via `getAbsoluteFSPath()`,
+  which Vercel's file tracer cannot follow. Without this the assets are missing
+  from the bundle and Swagger renders blank.
+- **`postinstall: prisma generate`** — Prisma 7 no longer generates implicitly,
+  and the client is gitignored, so it must be rebuilt on every deploy.
+
+`prisma.config.ts` reads `process.env` directly rather than Prisma's `env()`
+helper, which throws the moment the config file loads. That eager failure broke
+`prisma generate` during `npm install` whenever `DIRECT_URL` was absent — on a
+fresh Vercel build, or for anyone cloning the repo before writing a `.env`.
+
+Migrations run with `prisma migrate deploy`; the seed is run deliberately
+(`npx prisma db seed`) rather than on every deploy.
+
 ## 📤 Submission
 
 ```
 Project Name    : PowerGrid BD - Load Shedding & Power Outage Management System
-Backend Repo    : <repo url>
-Live API        : <vercel url>
-API Docs        : <vercel url>/api/docs
+Backend Repo    : https://github.com/Nurunnabi87/powergrid-bd-backend
+Live API        : https://powergrid-bd-backend.vercel.app
+API Docs        : https://powergrid-bd-backend.vercel.app/api/docs
 Demo Video      : <video url>
 Admin Email     : admin@powergrid.bd
 Admin Password  : Admin@1234
