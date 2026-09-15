@@ -18,7 +18,13 @@
           "  { key: \"customerToken\",   email: \"customer1@powergrid.bd\", password: \"Customer@1234\" },",
           "];",
           "",
-          "const missing = accounts.filter((a) => !pm.collectionVariables.get(a.key));",
+          "// Re-login when a token is missing or was fetched more than 50 minutes",
+          "// ago, so an expired token never turns every request into a 401.",
+          "const now = Date.now();",
+          "const missing = accounts.filter((a) =>",
+          "  !pm.collectionVariables.get(a.key) ||",
+          "  Number(pm.collectionVariables.get(a.key + \"FetchedAt\") || 0) < now - 50 * 60 * 1000",
+          ");",
           "if (missing.length === 0) { return; }",
           "",
           "let pending = missing.length;",
@@ -32,6 +38,7 @@
           "    if (!err && res.code === 200) {",
           "      const data = res.json().data;",
           "      pm.collectionVariables.set(account.key, data.accessToken);",
+          "      pm.collectionVariables.set(account.key + \"FetchedAt\", String(Date.now()));",
           "      if (account.key === \"customerToken\") {",
           "        pm.collectionVariables.set(\"customerRefreshToken\", data.refreshToken);",
           "      }",
@@ -46,11 +53,11 @@
   "variable": [
     {
       "key": "hostUrl",
-      "value": "http://localhost:5000"
+      "value": "https://powergrid-bd-backend.vercel.app"
     },
     {
       "key": "baseUrl",
-      "value": "http://localhost:5000/api/v1"
+      "value": "https://powergrid-bd-backend.vercel.app/api/v1"
     },
     {
       "key": "adminToken",
@@ -1464,7 +1471,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
+                "value": "Bearer {{customerToken}}"
               }
             ],
             "url": {
@@ -2295,7 +2302,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
+                "value": "Bearer {{customerToken}}"
               }
             ],
             "url": {

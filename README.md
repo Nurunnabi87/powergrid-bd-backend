@@ -156,12 +156,12 @@ Open `http://localhost:5000/api/docs` for Swagger, or import the Postman
 collection and hit **Send** on anything — a pre-request script logs in as all
 three roles and caches the tokens for you.
 
-To point the Postman collection at the deployed API instead, change two
-collection variables:
+The Postman collection points at the deployed API by default. To run it
+against your local server instead, change two collection variables:
 
 ```
-hostUrl = https://powergrid-bd-backend.vercel.app
-baseUrl = https://powergrid-bd-backend.vercel.app/api/v1
+hostUrl = http://localhost:5000
+baseUrl = http://localhost:5000/api/v1
 ```
 
 > **Windows note:** this project's folder name contains an `&`, which `cmd.exe`

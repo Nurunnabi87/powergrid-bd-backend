@@ -24,7 +24,8 @@ const BASE_URL = '{{baseUrl}}';
 /** Chooses the token variable a request should send. */
 const tokenFor = (summary: string, folder: string): string => {
   const text = `${summary} ${folder}`.toUpperCase();
-  if (text.includes('(CUSTOMER)') || text.includes('MY BILLS')) return '{{customerToken}}';
+  // Prefix match, so "(CUSTOMER, Redis-cached)" and "(CUSTOMER, ADMIN)" count too.
+  if (text.includes('(CUSTOMER') || text.includes('MY BILLS')) return '{{customerToken}}';
   if (text.includes('(TECHNICIAN)')) return '{{technicianToken}}';
   if (text.includes('(ADMIN')) return '{{adminToken}}';
   // Endpoints open to any signed-in user default to the admin token, which
@@ -138,7 +139,13 @@ const main = (): void => {
             '  { key: "customerToken",   email: "customer1@powergrid.bd", password: "Customer@1234" },',
             '];',
             '',
-            'const missing = accounts.filter((a) => !pm.collectionVariables.get(a.key));',
+            '// Re-login when a token is missing or was fetched more than 50 minutes',
+            '// ago, so an expired token never turns every request into a 401.',
+            'const now = Date.now();',
+            'const missing = accounts.filter((a) =>',
+            '  !pm.collectionVariables.get(a.key) ||',
+            '  Number(pm.collectionVariables.get(a.key + "FetchedAt") || 0) < now - 50 * 60 * 1000',
+            ');',
             'if (missing.length === 0) { return; }',
             '',
             'let pending = missing.length;',
@@ -152,6 +159,7 @@ const main = (): void => {
             '    if (!err && res.code === 200) {',
             '      const data = res.json().data;',
             '      pm.collectionVariables.set(account.key, data.accessToken);',
+            '      pm.collectionVariables.set(account.key + "FetchedAt", String(Date.now()));',
             '      if (account.key === "customerToken") {',
             '        pm.collectionVariables.set("customerRefreshToken", data.refreshToken);',
             '      }',
@@ -164,8 +172,9 @@ const main = (): void => {
       },
     ],
     variable: [
-      { key: 'hostUrl', value: 'http://localhost:5000' },
-      { key: 'baseUrl', value: 'http://localhost:5000/api/v1' },
+      // Live deployment by default; switch to http://localhost:5000 for local work.
+      { key: 'hostUrl', value: 'https://powergrid-bd-backend.vercel.app' },
+      { key: 'baseUrl', value: 'https://powergrid-bd-backend.vercel.app/api/v1' },
       { key: 'adminToken', value: '' },
       { key: 'technicianToken', value: '' },
       { key: 'customerToken', value: '' },
