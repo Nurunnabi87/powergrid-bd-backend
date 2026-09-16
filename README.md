@@ -394,7 +394,7 @@ Project Name    : PowerGrid BD - Load Shedding & Power Outage Management System
 Backend Repo    : https://github.com/Nurunnabi87/powergrid-bd-backend
 Live API        : https://powergrid-bd-backend.vercel.app
 API Docs        : https://powergrid-bd-backend.vercel.app/api/docs
-Demo Video      : <video url>
+Demo Video      : https://drive.google.com/file/d/1kIViYDpwPvcbH6UU_FpadcLheBqNkAXG/view?usp=sharing
 Admin Email     : admin@powergrid.bd
 Admin Password  : Admin@1234
 ```
