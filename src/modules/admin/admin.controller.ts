@@ -21,6 +21,15 @@ const getUsers = async (req: Request, res: Response): Promise<void> => {
   });
 };
 
+const getTechnicians = async (req: Request, res: Response): Promise<void> => {
+  const data = await AdminService.getTechnicians(req.query as Record<string, unknown>);
+  sendResponse(res, {
+    statusCode: 200,
+    message: 'Technicians retrieved successfully',
+    data,
+  });
+};
+
 const updateRole = async (req: Request, res: Response): Promise<void> => {
   const data = await AdminService.updateRole(
     param(req, 'id'),
@@ -68,6 +77,27 @@ const getAuditLogs = async (req: Request, res: Response): Promise<void> => {
   });
 };
 
+const getContactMessages = async (req: Request, res: Response): Promise<void> => {
+  const { data, meta } = await AdminService.getContactMessages(
+    req.query as Record<string, unknown>
+  );
+  sendResponse(res, {
+    statusCode: 200,
+    message: 'Contact messages retrieved successfully',
+    meta,
+    data,
+  });
+};
+
+const markContactRead = async (req: Request, res: Response): Promise<void> => {
+  const data = await AdminService.markContactRead(param(req, 'id'));
+  sendResponse(res, {
+    statusCode: 200,
+    message: data.alreadyRead ? 'Message was already read' : 'Message marked as read',
+    data,
+  });
+};
+
 const clearCache = async (_req: Request, res: Response): Promise<void> => {
   const data = await AdminService.clearCache();
   sendResponse(res, { statusCode: 200, message: 'Caches cleared', data });
@@ -75,9 +105,12 @@ const clearCache = async (_req: Request, res: Response): Promise<void> => {
 
 export const AdminController = {
   getUsers,
+  getTechnicians,
   updateRole,
   updateStatus,
   getDashboardStats,
   getAuditLogs,
+  getContactMessages,
+  markContactRead,
   clearCache,
 };

@@ -19,6 +19,8 @@ import { cacheGet, cacheSet, cacheInvalidate } from '../../shared/redis';
 const USER_SORTABLE = ['name', 'email', 'createdAt'] as const;
 const USER_SEARCHABLE = ['name', 'email', 'phone'] as const;
 const AUDIT_SORTABLE = ['createdAt'] as const;
+const CONTACT_SORTABLE = ['createdAt'] as const;
+const CONTACT_SEARCHABLE = ['name', 'email', 'subject'] as const;
 
 const DASHBOARD_CACHE_KEY = 'analytics:dashboard';
 const DASHBOARD_TTL = 60;
@@ -65,7 +67,73 @@ const getUsers = async (query: Record<string, unknown>) => {
   return { data, meta: buildMeta(page, limit, total) };
 };
 
-const updateRole = async (id: string, role: UserRole, actor: TActor) => {
+/**
+ * Technicians with their live capacity, for the dispatch dialog. The
+ * `canTakeJob` flag applies exactly the checks the assign endpoint enforces
+ * (active account, available, below max jobs, same zone or unzoned), so the
+ * UI can disable ineligible technicians instead of waiting for a 409.
+ */
+const getTechnicians = async (query: Record<string, unknown>) => {
+  const zoneId = typeof query.zoneId === 'string' && query.zoneId ? query.zoneId : undefined;
+  const search = typeof query.search === 'string' ? query.search.trim() : '';
+
+  const technicians = await prisma.user.findMany({
+    where: {
+      isDeleted: false,
+      role: UserRole.TECHNICIAN,
+      technicianProfile: { isNot: null },
+      ...buildSearchFilter(search || undefined, USER_SEARCHABLE),
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      avatarUrl: true,
+      status: true,
+      technicianProfile: {
+        select: {
+          specialization: true,
+          isAvailable: true,
+          activeJobCount: true,
+          maxConcurrentJobs: true,
+          zone: { select: { id: true, name: true, code: true } },
+        },
+      },
+    },
+    orderBy: { name: 'asc' },
+    take: 100,
+  });
+
+  const rows = technicians.map(({ technicianProfile, ...user }) => {
+    // Guaranteed by the `isNot: null` filter above.
+    const profile = technicianProfile!;
+    const inZone = !zoneId || !profile.zone || profile.zone.id === zoneId;
+
+    return {
+      ...user,
+      ...profile,
+      inZone,
+      canTakeJob:
+        user.status === UserStatus.ACTIVE &&
+        profile.isAvailable &&
+        profile.activeJobCount < profile.maxConcurrentJobs &&
+        inZone,
+    };
+  });
+
+  const onlyAvailable = query.available === 'true';
+
+  // Eligible technicians first, then by lightest workload.
+  return rows
+    .filter((row) => !onlyAvailable || row.canTakeJob)
+    .sort(
+      (a, b) =>
+        Number(b.canTakeJob) - Number(a.canTakeJob) || a.activeJobCount - b.activeJobCount
+    );
+};
+
+const updateRole =async (id: string, role: UserRole, actor: TActor) => {
   const existing = await prisma.user.findFirst({
     where: { id, isDeleted: false },
     select: { id: true, name: true, role: true },
@@ -306,18 +374,79 @@ const getAuditLogs = async (query: Record<string, unknown>) => {
   return { data, meta: buildMeta(page, limit, total) };
 };
 
+// ---------- CONTACT INBOX ----------
+
+const getContactMessages = async (query: Record<string, unknown>) => {
+  const { page, limit, skip, sortBy, sortOrder, search } = buildQueryOptions({
+    query,
+    sortableFields: CONTACT_SORTABLE,
+  });
+
+  const where: Prisma.ContactMessageWhereInput = {
+    ...(query.isRead === 'true' || query.isRead === 'false'
+      ? { isRead: query.isRead === 'true' }
+      : {}),
+    ...buildSearchFilter(search, CONTACT_SEARCHABLE),
+  };
+
+  const [data, total] = await Promise.all([
+    prisma.contactMessage.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        subject: true,
+        message: true,
+        isRead: true,
+        readAt: true,
+        createdAt: true,
+      },
+      skip,
+      take: limit,
+      orderBy: { [sortBy]: sortOrder },
+    }),
+    prisma.contactMessage.count({ where }),
+  ]);
+
+  return { data, meta: buildMeta(page, limit, total) };
+};
+
+const markContactRead = async (id: string) => {
+  const message = await prisma.contactMessage.findUnique({
+    where: { id },
+    select: { id: true, isRead: true },
+  });
+
+  if (!message) throw new AppError(404, 'Contact message not found');
+
+  if (message.isRead) return { id, alreadyRead: true };
+
+  await prisma.contactMessage.update({
+    where: { id },
+    data: { isRead: true, readAt: new Date() },
+  });
+
+  return { id, alreadyRead: false };
+};
+
 /** Lets an admin drop the cached dashboard without waiting for the TTL. */
 const clearCache = async () => {
   await cacheInvalidate('analytics:*');
   await cacheInvalidate('schedule:*');
+  await cacheInvalidate('public:*');
   return { cleared: true };
 };
 
 export const AdminService = {
   getUsers,
+  getTechnicians,
   updateRole,
   updateStatus,
   getDashboardStats,
   getAuditLogs,
+  getContactMessages,
+  markContactRead,
   clearCache,
 };

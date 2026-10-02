@@ -16,4 +16,13 @@ const idParamSchema = z.object({
   params: z.object({ id: z.uuid('Invalid user id') }),
 });
 
-export const AdminValidation = { updateRoleSchema, updateStatusSchema, idParamSchema };
+const messageIdParamSchema = z.object({
+  params: z.object({ id: z.uuid('Invalid message id') }),
+});
+
+export const AdminValidation = {
+  updateRoleSchema,
+  updateStatusSchema,
+  idParamSchema,
+  messageIdParamSchema,
+};

@@ -10,6 +10,7 @@ const router = Router();
 router.use(auth('ADMIN'));
 
 router.get('/users', AdminController.getUsers);
+router.get('/technicians', AdminController.getTechnicians);
 
 router.patch(
   '/users/:id/role',
@@ -27,6 +28,14 @@ router.patch(
 
 router.get('/dashboard-stats', AdminController.getDashboardStats);
 router.get('/audit-logs', AdminController.getAuditLogs);
+
+router.get('/contact-messages', AdminController.getContactMessages);
+router.patch(
+  '/contact-messages/:id/read',
+  validateRequest(AdminValidation.messageIdParamSchema),
+  AdminController.markContactRead
+);
+
 router.post('/cache/clear', AdminController.clearCache);
 
 export const AdminRoutes = router;

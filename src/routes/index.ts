@@ -13,6 +13,7 @@ import { PaymentRoutes } from '../modules/payment/payment.routes';
 import { AdminRoutes } from '../modules/admin/admin.routes';
 import { AnalyticsRoutes } from '../modules/analytics/analytics.routes';
 import { ZoneRoutes } from '../modules/zone/zone.routes';
+import { PublicRoutes } from '../modules/public/public.routes';
 
 type TModuleRoute = { path: string; route: Router };
 
@@ -34,6 +35,7 @@ const moduleRoutes: TModuleRoute[] = [
   { path: '/admin', route: AdminRoutes },
   { path: '/analytics', route: AnalyticsRoutes },
   { path: '/notifications', route: NotificationRoutes },
+  { path: '/public', route: PublicRoutes },
 ];
 
 moduleRoutes.forEach(({ path, route }) => router.use(path, route));
