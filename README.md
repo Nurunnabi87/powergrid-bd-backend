@@ -3,7 +3,7 @@
 > A load-shedding and power-outage management API for a national electricity
 > distribution utility — from the distribution hierarchy down to the meter,
 > covering scheduled load shedding, unexpected outages, technician dispatch,
-> restoration tracking and bKash bill payment.
+> restoration tracking and bill payment through Stripe Checkout or bKash.
 
 ## 🔗 Links
 
@@ -37,7 +37,7 @@ CUSTOMER    customer1@powergrid.bd  Customer@1234
 | Auth | JWT access + refresh tokens, bcrypt, Google (GCP) ID-token login |
 | Caching | Redis (`ioredis`) — optional, degrades to direct queries |
 | Security | helmet, CORS allowlist, `express-rate-limit` (+ Redis store) |
-| Payments | **bKash Tokenized Checkout** |
+| Payments | **Stripe Checkout** (test mode) and **bKash Tokenized Checkout** |
 | File storage | Multer (memory) + Cloudinary |
 | Email | Nodemailer (optional; logs to console when unset) |
 | Docs | OpenAPI 3.0.3 + Swagger UI, generated Postman collection |
@@ -80,7 +80,7 @@ corrupting the record.
 - View the load-shedding schedule for their own areas (Redis-cached)
 - Report unexpected outages, with an optional photo uploaded to Cloudinary
 - Track their reports through to restoration
-- View bills and outstanding balance; pay via bKash
+- View bills and outstanding balance; pay by card (Stripe) or bKash
 - In-app notifications for schedules, restoration and payments
 
 ### Technician
@@ -88,6 +88,12 @@ corrupting the record.
 - Accept a job and move it `ASSIGNED → IN_PROGRESS → RESOLVED`
 - Restore power, which records downtime and notifies the whole affected area
 - Cannot touch outages they are not assigned to
+- Toggle their own availability and specialization, and see their own
+  restoration analytics
+
+### Public (no login)
+- Network statistics, zones and the day's published load-shedding timetable
+- Contact form that lands in an admin inbox
 
 ### Admin
 - Full CRUD over zones, substations, feeders, areas and connections
@@ -125,6 +131,16 @@ if (claimed.count === 0) throw new AppError(409, 'Already assigned');
 That is a compare-and-swap: if two admins dispatch at the same instant, the
 loser sees `count === 0`. Verified with four parallel requests — one `200`,
 three rejections, exactly one assignment row, `activeJobCount === 1`.
+
+**Stripe Checkout, verified server-side.** Returning to the success page
+proves nothing on its own, so `POST /payments/:id/verify` reads the Checkout
+Session back from Stripe and settles only when it is `paid`, carries this
+payment's id in its metadata, and matches the bill's amount and currency.
+Settlement claims the payment with a conditional update
+(`status != COMPLETED`), so when the success page and the optional webhook
+race each other exactly one of them settles. The cancel page calls
+`POST /payments/:id/cancel`, which expires the session and frees the bill —
+unless the session is already paid, in which case it settles instead.
 
 **Payment verification without a webhook.** bKash Tokenized Checkout has no
 webhook, so the server is the only party that can confirm a charge. After the
@@ -170,7 +186,7 @@ baseUrl = http://localhost:5000/api/v1
 > seed command invokes `tsx`'s entry file through `node` directly for the same
 > reason.
 
-## 📡 API Endpoints (75 operations, `/api/v1`)
+## 📡 API Endpoints (86 operations, `/api/v1`)
 
 ### Auth
 | Method | Endpoint | Access |
@@ -189,6 +205,7 @@ baseUrl = http://localhost:5000/api/v1
 | PATCH | `/users/me` | Authenticated |
 | PATCH | `/users/me/avatar` | Authenticated |
 | GET | `/users/me/connections` | Authenticated |
+| PATCH | `/users/me/technician-profile` | TECHNICIAN |
 
 ### Distribution hierarchy
 `zones`, `substations`, `feeders`, `areas`, `connections` each expose the same
@@ -235,9 +252,11 @@ five routes — reads for any signed-in user, writes for `ADMIN`:
 | GET | `/bills` | ADMIN |
 | GET | `/bills/my` | CUSTOMER |
 | GET | `/bills/:id` | Authenticated (ownership enforced) |
-| POST | `/payments/initiate` | CUSTOMER |
+| POST | `/payments/initiate` | CUSTOMER, `provider: STRIPE \| BKASH` |
 | GET | `/payments/bkash/callback` | Public (bKash redirect) |
+| POST | `/payments/stripe/webhook` | Public (Stripe-signed, optional) |
 | POST | `/payments/:id/verify` | CUSTOMER, ADMIN |
+| POST | `/payments/:id/cancel` | CUSTOMER |
 | GET | `/payments/my` | CUSTOMER |
 | GET | `/payments` | ADMIN |
 | GET | `/payments/:id` | Authenticated |
@@ -249,14 +268,26 @@ five routes — reads for any signed-in user, writes for `ADMIN`:
 | PATCH | `/notifications/read-all` | Authenticated |
 | PATCH | `/notifications/:id/read` | Authenticated |
 | GET | `/admin/users` | ADMIN |
+| GET | `/admin/technicians` | ADMIN, live capacity for dispatch |
 | PATCH | `/admin/users/:id/role` | ADMIN |
 | PATCH | `/admin/users/:id/status` | ADMIN |
 | GET | `/admin/dashboard-stats` | ADMIN, cached |
 | GET | `/admin/audit-logs` | ADMIN |
+| GET | `/admin/contact-messages` | ADMIN |
+| PATCH | `/admin/contact-messages/:id/read` | ADMIN |
 | POST | `/admin/cache/clear` | ADMIN |
 | GET | `/analytics/outages` | ADMIN |
 | GET | `/analytics/load-shedding` | ADMIN |
 | GET | `/analytics/technicians` | ADMIN |
+| GET | `/analytics/my-performance` | TECHNICIAN |
+
+### Public (no authentication)
+| Method | Endpoint | Notes |
+|---|---|---|
+| GET | `/public/stats` | Network size, shedding today, restoration stats (cached) |
+| GET | `/public/zones` | Zones for the schedule filter |
+| GET | `/public/schedules` | `?zoneId&date&search&page&limit` — search matches feeder or area |
+| POST | `/public/contact` | Contact form, 5 per hour per IP |
 
 ## 📦 Response Format
 
@@ -278,6 +309,25 @@ five routes — reads for any signed-in user, writes for `ADMIN`:
 ```
 
 ## 💳 Testing Payments
+
+### Stripe (card, test mode)
+
+1. Log in as a customer and `GET /bills/my` to pick an unpaid bill.
+2. `POST /payments/initiate` with `{ "billId": "<id>", "provider": "STRIPE" }`
+   → returns `redirectUrl` (a Stripe Checkout page) and our `paymentId`.
+3. Pay with card `4242 4242 4242 4242`, any future expiry, any CVC.
+4. Stripe returns the browser to
+   `FRONTEND_URL/payment/success?paymentId=<id>&session_id=...`; the
+   frontend calls `POST /payments/:id/verify`, which re-reads the session
+   from Stripe and marks the bill `PAID`.
+5. Backing out of Checkout lands on `/payment/cancel`, which calls
+   `POST /payments/:id/cancel` and returns the bill to `UNPAID`.
+
+Optional webhook for local testing:
+`stripe listen --forward-to localhost:5000/api/v1/payments/stripe/webhook`
+and put the printed `whsec_...` into `STRIPE_WEBHOOK_SECRET`.
+
+### bKash (sandbox)
 
 1. Log in as a customer and `GET /bills/my` to pick an unpaid bill.
 2. `POST /payments/initiate` with `{ "billId": "<id>" }` → returns `bkashURL`.

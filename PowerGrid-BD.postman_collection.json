@@ -420,6 +420,39 @@
             "description": ""
           },
           "response": []
+        },
+        {
+          "name": "Update my availability or specialization (TECHNICIAN)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{technicianToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isAvailable\": false,\n  \"specialization\": \"{{specialization}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/me/technician-profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "me",
+                "technician-profile"
+              ]
+            },
+            "description": "Going unavailable stops new dispatches; jobs already assigned stay assigned."
+          },
+          "response": []
         }
       ]
     },
@@ -2227,7 +2260,7 @@
       "name": "Payment",
       "item": [
         {
-          "name": "Start a bKash payment for a bill (CUSTOMER)",
+          "name": "Start a Stripe or bKash payment for a bill (CUSTOMER)",
           "request": {
             "method": "POST",
             "header": [
@@ -2242,7 +2275,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"billId\": \"{{billId}}\"\n}"
+              "raw": "{\n  \"billId\": \"{{billId}}\",\n  \"provider\": \"STRIPE\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/payments/initiate",
@@ -2254,7 +2287,7 @@
                 "initiate"
               ]
             },
-            "description": "Returns a bkashURL to open in a browser. Sandbox wallet 01770618575, OTP 123456, PIN 12121."
+            "description": "Returns a `redirectUrl` to open in the browser.\n\n- **STRIPE**: Stripe Checkout (test mode). Test card 4242 4242 4242 4242, any future expiry, any CVC. Stripe returns the payer to `FRONTEND_URL/payment/success` or `/payment/cancel` with our `paymentId`.\n- **BKASH** (default): sandbox wallet 01770618575, OTP 123456, PIN 12121."
           },
           "response": []
         },
@@ -2291,12 +2324,12 @@
                 }
               ]
             },
-            "description": "bKash redirects the payer's browser here. On `status=success` the server\ncalls Execute Payment and, if needed, Query Payment Status, and only then\nsettles the bill. Add `raw=true` to receive JSON instead of a redirect,\nwhich is how the flow is demonstrated in Postman."
+            "description": "bKash redirects the payer's browser here. On `status=success` the server\ncalls Execute Payment and, if needed, Query Payment Status, and only then\nsettles the bill, then redirects to `FRONTEND_URL/payment/{success|cancel|failed}`.\nAdd `raw=true` to receive JSON instead of a redirect, which is how the flow\nis demonstrated in Postman."
           },
           "response": []
         },
         {
-          "name": "Re-verify a payment against bKash (CUSTOMER, ADMIN)",
+          "name": "Verify a payment with its gateway and settle it (CUSTOMER, ADMIN)",
           "request": {
             "method": "POST",
             "header": [
@@ -2322,7 +2355,58 @@
                 }
               ]
             },
-            "description": "Idempotent safety net for when the payer never returns from the redirect. An already-settled payment short-circuits instead of being processed twice."
+            "description": "Called by the frontend success page. Stripe payments are settled only when the Checkout Session reads back as paid with a matching amount and currency; bKash payments go through Execute/Query Payment. Idempotent: an already-settled payment short-circuits instead of being processed twice."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel an unfinished payment (CUSTOMER)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/payments/:id/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                ":id",
+                "cancel"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}"
+                }
+              ]
+            },
+            "description": "Called by the frontend cancel page. Expires an open Stripe Checkout Session and returns the bill to UNPAID. If the session turns out to be paid already, it is settled instead of cancelled."
+          },
+          "response": []
+        },
+        {
+          "name": "Stripe webhook (signature-verified)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/payments/stripe/webhook",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "payments",
+                "stripe",
+                "webhook"
+              ]
+            },
+            "description": "Optional safety net, enabled when STRIPE_WEBHOOK_SECRET is set. Handles checkout.session.completed, async_payment_succeeded and expired through the same idempotent settlement as the success page."
           },
           "response": []
         },
@@ -2853,6 +2937,135 @@
             "description": ""
           },
           "response": []
+        },
+        {
+          "name": "Technicians with live capacity for dispatch (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/technicians",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "technicians"
+              ],
+              "query": [
+                {
+                  "key": "zoneId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "available",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "`canTakeJob` applies the same checks as the assign endpoint (active, available, below max jobs, same zone or unzoned). Eligible technicians are listed first."
+          },
+          "response": []
+        },
+        {
+          "name": "Messages from the public contact form (ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/contact-messages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "contact-messages"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sortBy",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "isRead",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Mark a contact message as read (ADMIN)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/contact-messages/:id/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "contact-messages",
+                ":id",
+                "read"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{id}}"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
         }
       ]
     },
@@ -2949,6 +3162,147 @@
               "path": [
                 "analytics",
                 "technicians"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "My own workload, restoration speed and monthly trend (TECHNICIAN)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{technicianToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/analytics/my-performance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analytics",
+                "my-performance"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Public",
+      "item": [
+        {
+          "name": "Network size, shedding today and restoration stats (Redis-cached 120s)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/public/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "public",
+                "stats"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Distribution zones for the public schedule filter",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/public/zones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "public",
+                "zones"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "A day's published load-shedding timetable",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/public/schedules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "public",
+                "schedules"
+              ],
+              "query": [
+                {
+                  "key": "zoneId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "date",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "`search` matches the feeder name/code or any area the feeder serves. `date` defaults to today (UTC). Cancelled slots are excluded."
+          },
+          "response": []
+        },
+        {
+          "name": "Send a message to the support team (5 per hour per IP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{name}}\",\n  \"email\": \"{{email}}\",\n  \"phone\": \"01712345678\",\n  \"subject\": \"{{subject}}\",\n  \"message\": \"{{message}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/public/contact",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "public",
+                "contact"
               ]
             },
             "description": ""

@@ -171,10 +171,11 @@ A payment is only ever marked COMPLETED on a verified
     { name: 'Schedule', description: 'Load-shedding schedules' },
     { name: 'Outage', description: 'Outage lifecycle and technician dispatch' },
     { name: 'Bill', description: 'Electricity billing' },
-    { name: 'Payment', description: 'bKash payments' },
+    { name: 'Payment', description: 'Stripe Checkout and bKash payments' },
     { name: 'Notification', description: 'In-app notifications' },
     { name: 'Admin', description: 'User management, dashboard, audit logs' },
     { name: 'Analytics', description: 'Historical reporting' },
+    { name: 'Public', description: 'Unauthenticated data for the public website' },
   ],
   components: {
     securitySchemes: {
@@ -927,9 +928,13 @@ technicians. Also checks availability, the concurrent-job cap and zone.
     '/payments/initiate': {
       post: {
         tags: ['Payment'],
-        summary: 'Start a bKash payment for a bill (CUSTOMER)',
-        description:
-          'Returns a bkashURL to open in a browser. Sandbox wallet 01770618575, OTP 123456, PIN 12121.',
+        summary: 'Start a Stripe or bKash payment for a bill (CUSTOMER)',
+        description: `
+Returns a \`redirectUrl\` to open in the browser.
+
+- **STRIPE**: Stripe Checkout (test mode). Test card 4242 4242 4242 4242, any future expiry, any CVC. Stripe returns the payer to \`FRONTEND_URL/payment/success\` or \`/payment/cancel\` with our \`paymentId\`.
+- **BKASH** (default): sandbox wallet 01770618575, OTP 123456, PIN 12121.
+`.trim(),
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -938,7 +943,10 @@ technicians. Also checks availability, the concurrent-job cap and zone.
               schema: {
                 type: 'object',
                 required: ['billId'],
-                properties: { billId: { type: 'string', format: 'uuid' } },
+                properties: {
+                  billId: { type: 'string', format: 'uuid' },
+                  provider: { type: 'string', enum: ['STRIPE', 'BKASH'], default: 'BKASH' },
+                },
               },
             },
           },
@@ -947,7 +955,8 @@ technicians. Also checks availability, the concurrent-job cap and zone.
           201: ok('Payment session created'),
           ...COMMON_ERRORS,
           400: err('Bill already paid'),
-          502: err('bKash unreachable or rejected the request'),
+          502: err('Payment gateway unreachable or rejected the request'),
+          503: err('Payment gateway not configured'),
         },
       },
     },
@@ -958,8 +967,9 @@ technicians. Also checks availability, the concurrent-job cap and zone.
         description: `
 bKash redirects the payer's browser here. On \`status=success\` the server
 calls Execute Payment and, if needed, Query Payment Status, and only then
-settles the bill. Add \`raw=true\` to receive JSON instead of a redirect,
-which is how the flow is demonstrated in Postman.
+settles the bill, then redirects to \`FRONTEND_URL/payment/{success|cancel|failed}\`.
+Add \`raw=true\` to receive JSON instead of a redirect, which is how the flow
+is demonstrated in Postman.
 `.trim(),
         parameters: [
           { name: 'paymentID', in: 'query', required: true, schema: { type: 'string' } },
@@ -981,12 +991,36 @@ which is how the flow is demonstrated in Postman.
     '/payments/{id}/verify': {
       post: {
         tags: ['Payment'],
-        summary: 'Re-verify a payment against bKash (CUSTOMER, ADMIN)',
+        summary: 'Verify a payment with its gateway and settle it (CUSTOMER, ADMIN)',
         description:
-          'Idempotent safety net for when the payer never returns from the redirect. An already-settled payment short-circuits instead of being processed twice.',
+          'Called by the frontend success page. Stripe payments are settled only when the Checkout Session reads back as paid with a matching amount and currency; bKash payments go through Execute/Query Payment. Idempotent: an already-settled payment short-circuits instead of being processed twice.',
         security: [{ bearerAuth: [] }],
         parameters: [uuidParam('id', 'Payment id')],
         responses: { 200: ok('Payment verified'), ...COMMON_ERRORS },
+      },
+    },
+    '/payments/{id}/cancel': {
+      post: {
+        tags: ['Payment'],
+        summary: 'Cancel an unfinished payment (CUSTOMER)',
+        description:
+          'Called by the frontend cancel page. Expires an open Stripe Checkout Session and returns the bill to UNPAID. If the session turns out to be paid already, it is settled instead of cancelled.',
+        security: [{ bearerAuth: [] }],
+        parameters: [uuidParam('id', 'Payment id')],
+        responses: { 200: ok('Payment cancelled'), ...COMMON_ERRORS },
+      },
+    },
+    '/payments/stripe/webhook': {
+      post: {
+        tags: ['Payment'],
+        summary: 'Stripe webhook (signature-verified)',
+        description:
+          'Optional safety net, enabled when STRIPE_WEBHOOK_SECRET is set. Handles checkout.session.completed, async_payment_succeeded and expired through the same idempotent settlement as the success page.',
+        responses: {
+          200: { description: 'Event received' },
+          400: err('Invalid signature'),
+          503: err('Webhook not configured'),
+        },
       },
     },
     '/payments/my': {
@@ -1172,6 +1206,136 @@ which is how the flow is demonstrated in Postman.
         summary: 'Per-technician workload and restoration times (ADMIN)',
         security: [{ bearerAuth: [] }],
         responses: { 200: ok('Technician performance'), ...COMMON_ERRORS },
+      },
+    },
+    '/analytics/my-performance': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'My own workload, restoration speed and monthly trend (TECHNICIAN)',
+        security: [{ bearerAuth: [] }],
+        responses: { 200: ok('Technician self-analytics'), ...COMMON_ERRORS },
+      },
+    },
+
+    // ---------- TECHNICIAN SELF-SERVICE ----------
+    '/users/me/technician-profile': {
+      patch: {
+        tags: ['User'],
+        summary: 'Update my availability or specialization (TECHNICIAN)',
+        description:
+          'Going unavailable stops new dispatches; jobs already assigned stay assigned.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  isAvailable: { type: 'boolean' },
+                  specialization: { type: 'string', minLength: 2, maxLength: 100 },
+                },
+              },
+            },
+          },
+        },
+        responses: { 200: ok('Technician profile updated'), ...COMMON_ERRORS },
+      },
+    },
+
+    // ---------- ADMIN: DISPATCH & INBOX ----------
+    '/admin/technicians': {
+      get: {
+        tags: ['Admin'],
+        summary: 'Technicians with live capacity for dispatch (ADMIN)',
+        description:
+          '`canTakeJob` applies the same checks as the assign endpoint (active, available, below max jobs, same zone or unzoned). Eligible technicians are listed first.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'zoneId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+          { name: 'available', in: 'query', schema: { type: 'boolean' } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: { 200: ok('Technicians'), ...COMMON_ERRORS },
+      },
+    },
+    '/admin/contact-messages': {
+      get: {
+        tags: ['Admin'],
+        summary: 'Messages from the public contact form (ADMIN)',
+        security: [{ bearerAuth: [] }],
+        parameters: listParams({ isRead: 'true | false' }),
+        responses: { 200: ok('Paginated contact messages'), ...COMMON_ERRORS },
+      },
+    },
+    '/admin/contact-messages/{id}/read': {
+      patch: {
+        tags: ['Admin'],
+        summary: 'Mark a contact message as read (ADMIN)',
+        security: [{ bearerAuth: [] }],
+        parameters: [uuidParam('id', 'Contact message id')],
+        responses: { 200: ok('Marked as read'), ...COMMON_ERRORS },
+      },
+    },
+
+    // ---------- PUBLIC ----------
+    '/public/stats': {
+      get: {
+        tags: ['Public'],
+        summary: 'Network size, shedding today and restoration stats (Redis-cached 120s)',
+        responses: { 200: ok('Public grid statistics') },
+      },
+    },
+    '/public/zones': {
+      get: {
+        tags: ['Public'],
+        summary: 'Distribution zones for the public schedule filter',
+        responses: { 200: ok('Zones') },
+      },
+    },
+    '/public/schedules': {
+      get: {
+        tags: ['Public'],
+        summary: "A day's published load-shedding timetable",
+        description:
+          '`search` matches the feeder name/code or any area the feeder serves. `date` defaults to today (UTC). Cancelled slots are excluded.',
+        parameters: [
+          { name: 'zoneId', in: 'query', schema: { type: 'string', format: 'uuid' } },
+          { name: 'date', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 10, maximum: 100 } },
+        ],
+        responses: { 200: ok('Schedule slots'), 400: err('Invalid query') },
+      },
+    },
+    '/public/contact': {
+      post: {
+        tags: ['Public'],
+        summary: 'Send a message to the support team (5 per hour per IP)',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['name', 'email', 'subject', 'message'],
+                properties: {
+                  name: { type: 'string', minLength: 2, maxLength: 100 },
+                  email: { type: 'string', format: 'email' },
+                  phone: { type: 'string', example: '01712345678' },
+                  subject: { type: 'string', minLength: 3, maxLength: 150 },
+                  message: { type: 'string', minLength: 10, maxLength: 2000 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: ok('Message received'),
+          400: err('Validation failed'),
+          429: err('Too many messages'),
+        },
       },
     },
   },
