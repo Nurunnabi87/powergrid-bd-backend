@@ -20,4 +20,11 @@ router.patch('/me/avatar', auth(), singleImage('avatar'), UserController.updateA
 
 router.get('/me/connections', auth(), UserController.getMyConnections);
 
+router.patch(
+  '/me/technician-profile',
+  auth('TECHNICIAN'),
+  validateRequest(UserValidation.updateTechnicianProfileSchema),
+  UserController.updateTechnicianProfile
+);
+
 export const UserRoutes = router;

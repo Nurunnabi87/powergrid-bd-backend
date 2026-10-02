@@ -14,4 +14,6 @@ router.get(
 
 router.get('/technicians', auth('ADMIN'), AnalyticsController.getTechnicianPerformance);
 
+router.get('/my-performance', auth('TECHNICIAN'), AnalyticsController.getMyPerformance);
+
 export const AnalyticsRoutes = router;

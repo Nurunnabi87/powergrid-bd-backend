@@ -44,4 +44,23 @@ const getMyConnections = async (req: Request, res: Response): Promise<void> => {
   });
 };
 
-export const UserController = { getMe, updateMe, updateAvatar, getMyConnections };
+const updateTechnicianProfile = async (req: Request, res: Response): Promise<void> => {
+  const data = await UserService.updateTechnicianProfile(
+    currentUser(req).userId,
+    req.body,
+    clientIp(req)
+  );
+  sendResponse(res, {
+    statusCode: 200,
+    message: 'Technician profile updated successfully',
+    data,
+  });
+};
+
+export const UserController = {
+  getMe,
+  updateMe,
+  updateAvatar,
+  getMyConnections,
+  updateTechnicianProfile,
+};

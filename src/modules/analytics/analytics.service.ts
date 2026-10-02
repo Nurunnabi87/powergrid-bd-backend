@@ -1,4 +1,5 @@
-import { OutageStatus } from '../../generated/prisma/enums';
+import AppError from '../../errors/AppError';
+import { AssignmentStatus, OutageStatus } from '../../generated/prisma/enums';
 import prisma from '../../shared/prisma';
 import { cacheGet, cacheSet } from '../../shared/redis';
 
@@ -236,8 +237,100 @@ const getTechnicianPerformance = async () => {
   }));
 };
 
+/**
+ * One technician's own track record: workload, restoration speed, the
+ * severity mix of the jobs they closed, and a 12-month trend. Scoped to the
+ * caller's id, so a technician never sees a colleague's numbers.
+ */
+const getMyPerformance = async (technicianId: string) => {
+  const completedOutages = {
+    isDeleted: false,
+    assignments: { some: { technicianId, status: AssignmentStatus.COMPLETED } },
+  };
+
+  const [profile, byAssignmentStatus, restoration, bySeverity, monthly] =
+    await Promise.all([
+      prisma.technicianProfile.findUnique({
+        where: { userId: technicianId },
+        select: {
+          specialization: true,
+          isAvailable: true,
+          activeJobCount: true,
+          maxConcurrentJobs: true,
+          zone: { select: { id: true, name: true, code: true } },
+        },
+      }),
+      prisma.outageAssignment.groupBy({
+        by: ['status'],
+        where: { technicianId },
+        _count: { _all: true },
+      }),
+      prisma.outage.aggregate({
+        where: { ...completedOutages, downtimeMinutes: { not: null } },
+        _count: { _all: true },
+        _avg: { downtimeMinutes: true },
+        _min: { downtimeMinutes: true },
+        _max: { downtimeMinutes: true },
+        _sum: { downtimeMinutes: true, affectedCustomers: true },
+      }),
+      prisma.outage.groupBy({
+        by: ['severity'],
+        where: completedOutages,
+        _count: { _all: true },
+      }),
+      prisma.$queryRaw<{ month: string; jobs: bigint; avg_downtime: number | null }[]>`
+        SELECT to_char(date_trunc('month', a."completedAt"), 'YYYY-MM') AS month,
+               COUNT(*)                                                 AS jobs,
+               AVG(o."downtimeMinutes")                                 AS avg_downtime
+        FROM outage_assignments a
+        JOIN outages o ON o.id = a."outageId"
+        WHERE a."technicianId" = ${technicianId}
+          AND a.status = 'COMPLETED'
+          AND a."completedAt" >= date_trunc('month', now()) - interval '11 months'
+        GROUP BY 1
+        ORDER BY 1 ASC
+      `,
+    ]);
+
+  if (!profile) throw new AppError(404, 'No technician profile exists for this account');
+
+  const assignments = Object.fromEntries(
+    byAssignmentStatus.map((row) => [row.status, row._count._all])
+  );
+
+  return {
+    profile,
+    assignments: {
+      ASSIGNED: assignments.ASSIGNED ?? 0,
+      ACCEPTED: assignments.ACCEPTED ?? 0,
+      COMPLETED: assignments.COMPLETED ?? 0,
+      REASSIGNED: assignments.REASSIGNED ?? 0,
+      total: byAssignmentStatus.reduce((sum, row) => sum + row._count._all, 0),
+    },
+    restoration: {
+      jobsRestored: restoration._count._all,
+      averageMinutes: Math.round(restoration._avg.downtimeMinutes ?? 0),
+      fastestMinutes: restoration._min.downtimeMinutes,
+      slowestMinutes: restoration._max.downtimeMinutes,
+      totalDowntimeMinutes: restoration._sum.downtimeMinutes ?? 0,
+      customersRestored: restoration._sum.affectedCustomers ?? 0,
+    },
+    bySeverity: Object.fromEntries(
+      bySeverity.map((row) => [row.severity, row._count._all])
+    ),
+    // Ascending, ready to chart left-to-right.
+    monthlyTrend: monthly.map((row) => ({
+      month: row.month,
+      jobs: Number(row.jobs),
+      averageMinutes: Math.round(row.avg_downtime ?? 0),
+    })),
+    generatedAt: new Date().toISOString(),
+  };
+};
+
 export const AnalyticsService = {
   getOutageAnalytics,
   getLoadSheddingAnalytics,
   getTechnicianPerformance,
+  getMyPerformance,
 };

@@ -15,4 +15,20 @@ const updateMeSchema = z.object({
     }),
 });
 
-export const UserValidation = { updateMeSchema };
+const updateTechnicianProfileSchema = z.object({
+  body: z
+    .object({
+      isAvailable: z.boolean({ error: 'isAvailable must be true or false' }).optional(),
+      specialization: z
+        .string()
+        .trim()
+        .min(2, 'Specialization must be at least 2 characters')
+        .max(100, 'Specialization must be at most 100 characters')
+        .optional(),
+    })
+    .refine((body) => Object.keys(body).length > 0, {
+      message: 'Provide at least one field to update',
+    }),
+});
+
+export const UserValidation = { updateMeSchema, updateTechnicianProfileSchema };

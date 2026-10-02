@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { currentUser } from '../../shared/httpParams';
 import sendResponse from '../../shared/sendResponse';
 import { AnalyticsService } from './analytics.service';
 
@@ -37,8 +38,18 @@ const getTechnicianPerformance = async (
   });
 };
 
+const getMyPerformance = async (req: Request, res: Response): Promise<void> => {
+  const data = await AnalyticsService.getMyPerformance(currentUser(req).userId);
+  sendResponse(res, {
+    statusCode: 200,
+    message: 'Your performance retrieved successfully',
+    data,
+  });
+};
+
 export const AnalyticsController = {
   getOutageAnalytics,
   getLoadSheddingAnalytics,
   getTechnicianPerformance,
+  getMyPerformance,
 };

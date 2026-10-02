@@ -117,4 +117,44 @@ const getMyConnections = async (userId: string) => {
   });
 };
 
-export const UserService = { getMe, updateMe, updateAvatar, getMyConnections };
+/**
+ * A technician's own availability and specialization. Going unavailable
+ * only stops NEW dispatches (the assign check reads isAvailable); jobs
+ * already in hand stay assigned.
+ */
+const updateTechnicianProfile = async (
+  userId: string,
+  payload: Partial<{ isAvailable: boolean; specialization: string }>,
+  ip: string | null
+) => {
+  const profile = await prisma.technicianProfile.findUnique({
+    where: { userId },
+    select: { id: true, isAvailable: true, specialization: true },
+  });
+
+  if (!profile) throw new AppError(404, 'No technician profile exists for this account');
+
+  await prisma.$transaction(async (tx) => {
+    await tx.technicianProfile.update({ where: { userId }, data: payload });
+
+    await writeAudit(tx, {
+      actorId: userId,
+      action: 'TECHNICIAN_PROFILE_UPDATED',
+      entityType: 'User',
+      entityId: userId,
+      before: { isAvailable: profile.isAvailable, specialization: profile.specialization },
+      after: payload,
+      ipAddress: ip,
+    });
+  });
+
+  return getMe(userId);
+};
+
+export const UserService = {
+  getMe,
+  updateMe,
+  updateAvatar,
+  getMyConnections,
+  updateTechnicianProfile,
+};
