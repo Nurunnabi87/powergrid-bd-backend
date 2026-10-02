@@ -106,6 +106,7 @@ enum PaymentStatus {
 
 enum PaymentProvider {
   BKASH
+  STRIPE
 }
 
 enum NotificationType {
@@ -425,8 +426,9 @@ model Payment {
   currency              String          @default("BDT")
   provider              PaymentProvider @default(BKASH)
   status                PaymentStatus   @default(INITIATED)
-  // bKash identifiers. paymentID is returned by Create Payment; trxID only
-  // exists once Execute Payment succeeds.
+  // Gateway identifiers. bKash: paymentID comes from Create Payment and
+  // trxID once Execute Payment succeeds. Stripe: paymentID is the Checkout
+  // Session id and trxID the PaymentIntent id once the session is paid.
   paymentID             String?         @unique
   trxID                 String?         @unique
   merchantInvoiceNumber String          @unique
@@ -487,4 +489,24 @@ model AuditLog {
   @@index([actorId, createdAt])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ---------- PUBLIC CONTACT ----------
+
+// Messages sent from the public website's contact form. Visitors are not
+// logged in, so there is deliberately no user relation.
+model ContactMessage {
+  id        String    @id @default(uuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String
+  message   String
+  isRead    Boolean   @default(false)
+  readAt    DateTime?
+  ipAddress String?
+  createdAt DateTime  @default(now())
+
+  @@index([isRead, createdAt])
+  @@map("contact_messages")
 }
