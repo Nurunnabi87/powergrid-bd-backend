@@ -7,6 +7,7 @@ import { DocsRoutes } from './docs/docs.routes';
 import globalErrorHandler from './middlewares/globalErrorHandler';
 import notFound from './middlewares/notFound';
 import { globalLimiter } from './middlewares/rateLimiter';
+import { PaymentController } from './modules/payment/payment.controller';
 import router from './routes';
 
 const app: Application = express();
@@ -32,6 +33,14 @@ app.use(
     },
     credentials: true,
   })
+);
+
+// Stripe signs the exact bytes it sends, so its webhook must receive the
+// raw body. It is registered before express.json for that reason.
+app.post(
+  '/api/v1/payments/stripe/webhook',
+  express.raw({ type: 'application/json' }),
+  PaymentController.stripeWebhook
 );
 
 app.use(express.json({ limit: '2mb' }));

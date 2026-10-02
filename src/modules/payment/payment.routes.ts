@@ -32,6 +32,14 @@ router.post(
   PaymentController.verify
 );
 
+router.post(
+  '/:id/cancel',
+  auth('CUSTOMER'),
+  paymentLimiter,
+  validateRequest(PaymentValidation.idParamSchema),
+  PaymentController.cancel
+);
+
 router.get(
   '/:id',
   auth(),

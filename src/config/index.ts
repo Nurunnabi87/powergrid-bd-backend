@@ -54,6 +54,14 @@ export default {
     ),
   },
 
+  // Stripe Checkout (test mode). The webhook secret is optional: the
+  // success page confirms the session server-side, so the webhook is only a
+  // safety net for payers who close the tab before being redirected.
+  stripe: {
+    secret_key: optional('STRIPE_SECRET_KEY'),
+    webhook_secret: optional('STRIPE_WEBHOOK_SECRET'),
+  },
+
   cloudinary: {
     cloud_name: optional('CLOUDINARY_CLOUD_NAME'),
     api_key: optional('CLOUDINARY_API_KEY'),
